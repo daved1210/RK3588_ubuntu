@@ -1,4 +1,4 @@
-name: Custom Rockchip Build Factory
+name: Build Custom OS
 
 on:
   workflow_dispatch:
@@ -9,16 +9,18 @@ on:
         default: 'orangepi-5b'
         type: choice
         options:
-          - orangepi-5
           - orangepi-5b
+          - orangepi-5
           - orangepi-5-plus
-          - orangepi-5-pro
           - rock-5b
           - rock-5a
-          - radxa-zero3
           - nanopc-t6
+          - nanopi-r6s
+          - radxa-zero3
+          - armsom-sige7
+          - turing-rk1
       flavor:
-        description: '系统形态 (Image Flavor)'
+        description: '选择系统形态 (Flavor)'
         required: true
         default: 'server'
         type: choice
@@ -26,21 +28,22 @@ on:
           - server
           - desktop
       suite:
-        description: 'Ubuntu 版本代号 (Release Suite)'
+        description: '选择 Ubuntu 版本 (Suite)'
         required: true
         default: 'noble'
         type: choice
         options:
-          - noble    # Ubuntu 24.04 LTS (推荐)
-          - jammy    # Ubuntu 22.04 LTS (老旧但极度稳定)
-          - oracular # (可选) 顺便你也可以加上 24.10
+          - noble
+          - jammy
+
+run-name: Build ${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor }} for ${{ github.event.inputs.board }}
+
 jobs:
-  # 阶段 1：构建基础根文件系统
   rootfs:
     runs-on: ubuntu-latest
-    name: Prepare RootFS
+    name: Build rootfs 
     steps:
-      - name: Maximize Build Space
+      - name: Get more disk space
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: false
@@ -50,90 +53,134 @@ jobs:
           large-packages: true
           swap-storage: true
 
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - name: Install Dependencies
+      - name: Checkout LFS
+        shell: bash
+        run: git lfs fetch && git lfs checkout
+
+      - name: Install dependencies
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-user-static binfmt-support debootstrap xz-utils python3-yaml dctrl-tools
+          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
+          qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
+          debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
+          udev dosfstools uuid-runtime git-lfs device-tree-compiler python2 python3 \
+          python-is-python3 fdisk bc debhelper python3-pyelftools python3-setuptools \
+          python3-distutils python3-pkg-resources swig libfdt-dev libpython3-dev dctrl-tools
 
-      - name: Build RootFS
-        run: |
-          sudo ./build.sh --suite=${{ github.event.inputs.suite }} --flavor=${{ github.event.inputs.flavor }} --rootfs-only
+      - name: Build
+        shell: bash
+        run: sudo ./build.sh --suite=${{ github.event.inputs.suite }} --flavor=${{ github.event.inputs.flavor }} --rootfs-only
 
-      - name: Upload RootFS Artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload
+        uses: actions/upload-artifact@v4.3.3
         with:
-          name: rootfs-${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor }}
-          path: ./build/*.rootfs.tar.xz
+            name: ubuntu-${{ github.event.inputs.suite == 'jammy' && '22.04' || github.event.inputs.suite == 'noble' && '24.04' }}-preinstalled-${{ github.event.inputs.flavor }}-arm64-rootfs
+            path: ./build/ubuntu-${{ github.event.inputs.suite == 'jammy' && '22.04' || github.event.inputs.suite == 'noble' && '24.04' }}-preinstalled-${{ github.event.inputs.flavor }}-arm64.rootfs.tar.xz
+            if-no-files-found: error
 
-  # 阶段 2：编译内核
   kernel:
     runs-on: ubuntu-latest
-    name: Prepare Kernel
+    name: Build kernel 
     steps:
-      - name: Maximize Build Space
+      - name: Get more disk space
         uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
 
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - name: Install Build Tools
+      - name: Checkout LFS
+        shell: bash
+        run: git lfs fetch && git lfs checkout
+
+      - name: Install dependencies
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison flex libssl-dev bc rsync kmod cpio
+          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
+          qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
+          debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
+          udev dosfstools uuid-runtime git-lfs device-tree-compiler python2 python3 \
+          python-is-python3 fdisk bc debhelper python3-pyelftools python3-setuptools \
+          python3-distutils python3-pkg-resources swig libfdt-dev libpython3-dev dctrl-tools
 
-      - name: Build Kernel
-        run: |
-          sudo ./build.sh --suite=${{ github.event.inputs.suite }} --kernel-only
+      - name: Build
+        shell: bash
+        run: sudo ./build.sh --suite=${{ github.event.inputs.suite }} --kernel-only
 
-      - name: Upload Kernel Artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload
+        uses: actions/upload-artifact@v4.3.3
         with:
-          name: kernel-${{ github.event.inputs.suite }}
-          path: ./build/linux-*.deb
+            name: linux-rockchip-${{ github.event.inputs.suite == 'jammy' && '5.10' || github.event.inputs.suite == 'noble' && '6.1' }}
+            path: ./build/linux-*.deb
+            if-no-files-found: error
 
-  # 阶段 3：最终镜像封装
   build:
     runs-on: ubuntu-latest
     needs: [rootfs, kernel]
-    name: Finalize Image
+    name: Build image 
     steps:
-      - name: Maximize Build Space
+      - name: Get more disk space
         uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
 
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - name: Download RootFS
-        uses: actions/download-artifact@v4
-        with:
-          name: rootfs-${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor }}
-          path: ./build/
+      - name: Checkout LFS
+        shell: bash
+        run: git lfs fetch && git lfs checkout
 
-      - name: Download Kernel
-        uses: actions/download-artifact@v4
-        with:
-          name: kernel-${{ github.event.inputs.suite }}
-          path: ./build/
-
-      - name: Assemble Final Image
+      - name: Install dependencies
+        shell: bash
         run: |
-          # 安装必要的磁盘处理工具
-          sudo apt-get update
-          sudo apt-get install -y parted dosfstools uuid-runtime u-boot-tools
-          # 执行最终构建
-          sudo ./build.sh --board=${{ github.event.inputs.board }} --suite=${{ github.event.inputs.suite }} --flavor=${{ github.event.inputs.flavor }}
+          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
+          qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
+          debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
+          udev dosfstools uuid-runtime git-lfs device-tree-compiler python2 python3 \
+          python-is-python3 fdisk bc debhelper python3-pyelftools python3-setuptools \
+          python3-distutils python3-pkg-resources swig libfdt-dev libpython3-dev dctrl-tools
 
-      - name: Upload Final Image
-        uses: actions/upload-artifact@v4
+      - name: Checkout rootfs
+        uses: actions/download-artifact@v4.1.2
         with:
-          name: Ubuntu-${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor }}-${{ github.event.inputs.board }}
-          path: ./images/*.img.xz
+            name: ubuntu-${{ github.event.inputs.suite == 'jammy' && '22.04' || github.event.inputs.suite == 'noble' && '24.04' }}-preinstalled-${{ github.event.inputs.flavor }}-arm64-rootfs
+            path: ./build/
+
+      - name: Checkout kernel
+        uses: actions/download-artifact@v4.1.2
+        with:
+            name: linux-rockchip-${{ github.event.inputs.suite == 'jammy' && '5.10' || github.event.inputs.suite == 'noble' && '6.1' }}
+            path: ./build/
+
+      - name: Build
+        shell: bash
+        run: sudo ./build.sh --board=${{ github.event.inputs.board }} --suite=${{ github.event.inputs.suite }} --flavor=${{ github.event.inputs.flavor }}
+
+      - name: Upload
+        uses: actions/upload-artifact@v4.3.3
+        with:
+          name: ubuntu-${{ github.event.inputs.suite == 'jammy' && '22.04' || github.event.inputs.suite == 'noble' && '24.04' }}-preinstalled-${{ github.event.inputs.flavor }}-arm64-${{ github.event.inputs.board }}
+          path: ./images/ubuntu-*-preinstalled-${{ github.event.inputs.flavor }}-arm64-${{ github.event.inputs.board }}.*
+          if-no-files-found: error
+
+      - name: Clean cache
+        shell: bash
+        run: sync && sudo rm -rf ./images/ ./build/ && sync
