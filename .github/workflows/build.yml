@@ -1,24 +1,46 @@
-name: Build
+name: Custom Rockchip Build Factory
 
 on:
   workflow_dispatch:
-
-run-name: Build
+    inputs:
+      board:
+        description: '选择目标开发板 (Target Board)'
+        required: true
+        default: 'orangepi-5b'
+        type: choice
+        options:
+          - orangepi-5
+          - orangepi-5b
+          - orangepi-5-plus
+          - orangepi-5-pro
+          - rock-5b
+          - rock-5a
+          - radxa-zero3
+          - nanopc-t6
+      flavor:
+        description: '系统形态 (Image Flavor)'
+        required: true
+        default: 'server'
+        type: choice
+        options:
+          - server
+          - desktop
+      suite:
+        description: 'Ubuntu 版本代号 (Release Suite)'
+        required: true
+        default: 'noble'
+        type: choice
+        options:
+          - noble
+          - jammy
 
 jobs:
+  # 阶段 1：构建基础根文件系统
   rootfs:
     runs-on: ubuntu-latest
-    name: Build rootfs 
-    strategy:
-        matrix:
-          flavor:
-            - desktop
-            - server
-          suite:
-            - jammy
-            - noble
+    name: Prepare RootFS
     steps:
-      - name: Get more disk space
+      - name: Maximize Build Space
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: false
@@ -28,184 +50,90 @@ jobs:
           large-packages: true
           swap-storage: true
 
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Checkout LFS
-        shell: bash
-        run: git lfs fetch && git lfs checkout
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
-          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
-          qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
-          debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
-          udev dosfstools uuid-runtime git-lfs device-tree-compiler python2 python3 \
-          python-is-python3 fdisk bc debhelper python3-pyelftools python3-setuptools \
-          python3-distutils python3-pkg-resources swig libfdt-dev libpython3-dev dctrl-tools
-
-      - name: Build
-        shell: bash
-        run: sudo ./build.sh --suite=${{ matrix.suite }} --flavor=${{ matrix.flavor }} --rootfs-only
-
-      - name: Upload
-        uses: actions/upload-artifact@v4.3.3
         with:
-            name: ubuntu-${{ matrix.suite == 'jammy' && '22.04' || matrix.suite == 'noble' && '24.04' }}-preinstalled-${{ matrix.flavor }}-arm64-rootfs
-            path: ./build/ubuntu-${{ matrix.suite == 'jammy' && '22.04' || matrix.suite == 'noble' && '24.04' }}-preinstalled-${{ matrix.flavor }}-arm64.rootfs.tar.xz
-            if-no-files-found: error
+          lfs: true
 
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support debootstrap xz-utils python3-yaml dctrl-tools
+
+      - name: Build RootFS
+        run: |
+          sudo ./build.sh --suite=${{ github.event.inputs.suite }} --flavor=${{ github.event.inputs.flavor }} --rootfs-only
+
+      - name: Upload RootFS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootfs-${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor }}
+          path: ./build/*.rootfs.tar.xz
+
+  # 阶段 2：编译内核
   kernel:
     runs-on: ubuntu-latest
-    name: Build kernel 
-    strategy:
-        matrix:
-          suite:
-            - jammy
-            - noble
+    name: Prepare Kernel
     steps:
-      - name: Get more disk space
+      - name: Maximize Build Space
         uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          swap-storage: true
 
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Checkout LFS
-        shell: bash
-        run: git lfs fetch && git lfs checkout
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
-          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
-          qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
-          debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
-          udev dosfstools uuid-runtime git-lfs device-tree-compiler python2 python3 \
-          python-is-python3 fdisk bc debhelper python3-pyelftools python3-setuptools \
-          python3-distutils python3-pkg-resources swig libfdt-dev libpython3-dev
-
-      - name: Build
-        shell: bash
-        run: sudo ./build.sh --suite=${{ matrix.suite }} --kernel-only
-
-      - name: Upload
-        uses: actions/upload-artifact@v4.3.3
         with:
-            name: linux-rockchip-${{ matrix.suite == 'jammy' && '5.10' || matrix.suite == 'noble' && '6.1' }}
-            path: ./build/linux-*.deb
-            if-no-files-found: error
+          lfs: true
 
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison flex libssl-dev bc rsync kmod cpio
+
+      - name: Build Kernel
+        run: |
+          sudo ./build.sh --suite=${{ github.event.inputs.suite }} --kernel-only
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ github.event.inputs.suite }}
+          path: ./build/linux-*.deb
+
+  # 阶段 3：最终镜像封装
   build:
     runs-on: ubuntu-latest
     needs: [rootfs, kernel]
-    name: Build image 
-
-    strategy:
-      matrix:
-        board:
-          - aio-3588l
-          - armsom-aim7
-          - armsom-sige5
-          - armsom-sige7
-          - armsom-w3
-          - indiedroid-nova
-          - lubancat-4
-          - mixtile-blade3
-          - mixtile-core3588e
-          - nanopc-t6
-          - nanopi-r6c
-          - nanopi-r6s
-          - orangepi-3b
-          - orangepi-5
-          - orangepi-5-max
-          - orangepi-5-plus
-          - orangepi-5-pro
-          - orangepi-5b
-          - orangepi-cm5
-          - radxa-cm5-io
-          - radxa-cm5-rpi-cm4-io
-          - radxa-nx5-io
-          - radxa-zero3
-          - roc-rk3588s-pc
-          - rock-5-itx
-          - rock-5a
-          - rock-5b
-          - rock-5b-plus
-          - rock-5c
-          - rock-5d
-          - turing-rk1
-        flavor:
-          - desktop
-          - server
-        suite:
-          - jammy
-          - noble
-        exclude:
-          - board: armsom-sige5
-            suite: jammy
-
+    name: Finalize Image
     steps:
-      - name: Get more disk space
+      - name: Maximize Build Space
         uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          swap-storage: true
 
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      - name: Checkout LFS
-        shell: bash
-        run: git lfs fetch && git lfs checkout
+      - name: Download RootFS
+        uses: actions/download-artifact@v4
+        with:
+          name: rootfs-${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor }}
+          path: ./build/
 
-      - name: Install dependencies
-        shell: bash
+      - name: Download Kernel
+        uses: actions/download-artifact@v4
+        with:
+          name: kernel-${{ github.event.inputs.suite }}
+          path: ./build/
+
+      - name: Assemble Final Image
         run: |
-          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
-          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
-          qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
-          debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
-          udev dosfstools uuid-runtime git-lfs device-tree-compiler python2 python3 \
-          python-is-python3 fdisk bc debhelper python3-pyelftools python3-setuptools \
-          python3-distutils python3-pkg-resources swig libfdt-dev libpython3-dev dctrl-tools
+          # 安装必要的磁盘处理工具
+          sudo apt-get update
+          sudo apt-get install -y parted dosfstools uuid-runtime u-boot-tools
+          # 执行最终构建
+          sudo ./build.sh --board=${{ github.event.inputs.board }} --suite=${{ github.event.inputs.suite }} --flavor=${{ github.event.inputs.flavor }}
 
-      - name: Checkout rootfs
-        uses: actions/download-artifact@v4.1.2
+      - name: Upload Final Image
+        uses: actions/upload-artifact@v4
         with:
-            name: ubuntu-${{ matrix.suite == 'jammy' && '22.04' || matrix.suite == 'noble' && '24.04' }}-preinstalled-${{ matrix.flavor }}-arm64-rootfs
-            path: ./build/
-
-      - name: Checkout kernel
-        uses: actions/download-artifact@v4.1.2
-        with:
-            name: linux-rockchip-${{ matrix.suite == 'jammy' && '5.10' || matrix.suite == 'noble' && '6.1' }}
-            path: ./build/
-
-      - name: Build
-        shell: bash
-        run: sudo ./build.sh --board=${{ matrix.board }} --suite=${{ matrix.suite }} --flavor=${{ matrix.flavor }}
-
-      - name: Upload
-        uses: actions/upload-artifact@v4.3.3
-        with:
-          name: ubuntu-${{ matrix.suite == 'jammy' && '22.04' || matrix.suite == 'noble' && '24.04' }}-preinstalled-${{ matrix.flavor }}-arm64-${{ matrix.board }}
-          path: ./images/ubuntu-*-preinstalled-${{ matrix.flavor }}-arm64-${{ matrix.board }}.*
-          if-no-files-found: error
-
-      - name: Clean cache
-        shell: bash
-        run: sync && sudo rm -rf ./images/ ./build/ && sync
+          name: Ubuntu-${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor }}-${{ github.event.inputs.board }}
+          path: ./images/*.img.xz
