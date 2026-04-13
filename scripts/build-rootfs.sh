@@ -86,7 +86,7 @@ lb config \
     --linux-flavours "${KERNEL_FLAVOR}"
 
 if [ "${SUITE}" == "noble" ] || [ "${SUITE}" == "jammy" ]; then
-    # Pin rockchip package archives
+    # Pin rockchip package archives (Joshua-Riek 默认优先级 1001)
     (
         echo "Package: *"
         echo "Pin: release o=LP-PPA-jjriek-rockchip"
@@ -99,7 +99,7 @@ if [ "${SUITE}" == "noble" ] || [ "${SUITE}" == "jammy" ]; then
 fi
 
 if [ "${SUITE}" == "noble" ]; then
-    # Ignore custom ubiquity package (mistake i made, uploaded to wrong ppa)
+    # Ignore custom ubiquity package
     (
         echo "Package: oem-*"
         echo "Pin: release o=LP-PPA-jjriek-rockchip-multimedia"
@@ -137,26 +137,26 @@ else
 fi
 
 # ==============================================================================
-# 🚀 性能增强：注入 Mesa 25.x (Oibaf PPA) 以实现满血 GPU 驱动
+# 🚀 性能增强：注入 Kisak Mesa 26.0 驱动（满血 GPU + 解决公钥报错）
 # ==============================================================================
-# 1. 添加高版本图形驱动源列表 (适用于 noble/jammy)
-echo "deb https://ppa.launchpadcontent.net/oibaf/graphics-drivers/ubuntu ${SUITE} main" > config/archives/mesa-latest.list.chroot
+# 1. 使用 [trusted=yes] 强制信任源，跳过 GPG 秘钥检查，避免 NO_PUBKEY 报错
+echo "deb [trusted=yes] https://ppa.launchpadcontent.net/kisak/kisak-mesa/ubuntu ${SUITE} main" > config/archives/kisak-mesa.list.chroot
 
-# 2. 设置极高优先级 (1002)，确保强制覆盖系统自带的旧版 Mesa
+# 2. 设置 1002 优先级，确保即便 Joshua 源有同名包，系统也会强制降级安装 Kisak 的 26.0 版本
 (
-    echo "Package: *"
-    echo "Pin: release o=LP-PPA-oibaf-graphics-drivers"
+    echo "Package: mesa* libgl1-mesa* libglx-mesa0 libegl-mesa0 libgbm1 libglapi-mesa libgles2-mesa"
+    echo "Pin: release o=LP-PPA-kisak-kisak-mesa"
     echo "Pin-Priority: 1002" 
     echo ""
-) > config/archives/mesa-latest.pref.chroot
+) > config/archives/kisak-mesa.pref.chroot
 
-# 3. 补齐核心图形加速库，确保 lb build 时将其纳入
+# 3. 核心包声明：确保构建工具会将这些高性能组件打包进 RootFS
 (
     echo "libgl1-mesa-dri"
     echo "libegl-mesa0"
     echo "libgbm1"
     echo "libglapi-mesa"
-    echo "libgles2-mesa"
+    echo "mesa-vulkan-drivers"
 ) >> config/package-lists/my.list.chroot
 # ==============================================================================
 
