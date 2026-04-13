@@ -136,6 +136,30 @@ else
     echo "ubuntu-server-rockchip" >> config/package-lists/my.list.chroot
 fi
 
+# ==============================================================================
+# 🚀 性能增强：注入 Mesa 25.x (Oibaf PPA) 以实现满血 GPU 驱动
+# ==============================================================================
+# 1. 添加高版本图形驱动源列表 (适用于 noble/jammy)
+echo "deb https://ppa.launchpadcontent.net/oibaf/graphics-drivers/ubuntu ${SUITE} main" > config/archives/mesa-latest.list.chroot
+
+# 2. 设置极高优先级 (1002)，确保强制覆盖系统自带的旧版 Mesa
+(
+    echo "Package: *"
+    echo "Pin: release o=LP-PPA-oibaf-graphics-drivers"
+    echo "Pin-Priority: 1002" 
+    echo ""
+) > config/archives/mesa-latest.pref.chroot
+
+# 3. 补齐核心图形加速库，确保 lb build 时将其纳入
+(
+    echo "libgl1-mesa-dri"
+    echo "libegl-mesa0"
+    echo "libgbm1"
+    echo "libglapi-mesa"
+    echo "libgles2-mesa"
+) >> config/package-lists/my.list.chroot
+# ==============================================================================
+
 # Build the rootfs
 lb build
 
