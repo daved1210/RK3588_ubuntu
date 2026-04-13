@@ -40,7 +40,8 @@ run-name: Build ${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor 
 
 jobs:
   rootfs:
-    runs-on: ubuntu-latest
+    # 【核心修复 1】：将 ubuntu-latest 锁定为 ubuntu-22.04，解决 python2 等包找不到的问题
+    runs-on: ubuntu-22.04
     name: Build rootfs 
     steps:
       - name: Get more disk space
@@ -62,8 +63,9 @@ jobs:
 
       - name: Install dependencies
         shell: bash
+        # 【核心修复 2】：为所有的 apt-get 命令补齐 sudo 提权，解决 lock-frontend 报错
         run: |
-          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get update && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
           qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
           debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
@@ -83,7 +85,8 @@ jobs:
             if-no-files-found: error
 
   kernel:
-    runs-on: ubuntu-latest
+    # 【核心修复 1】
+    runs-on: ubuntu-22.04
     name: Build kernel 
     steps:
       - name: Get more disk space
@@ -105,8 +108,9 @@ jobs:
 
       - name: Install dependencies
         shell: bash
+        # 【核心修复 2】
         run: |
-          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get update && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
           qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
           debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
@@ -126,7 +130,8 @@ jobs:
             if-no-files-found: error
 
   build:
-    runs-on: ubuntu-latest
+    # 【核心修复 1】
+    runs-on: ubuntu-22.04
     needs: [rootfs, kernel]
     name: Build image 
     steps:
@@ -149,8 +154,9 @@ jobs:
 
       - name: Install dependencies
         shell: bash
+        # 【核心修复 2】
         run: |
-          sudo apt-get update && apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get update && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
           qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
           debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
