@@ -41,7 +41,7 @@ run-name: Build ${{ github.event.inputs.suite }}-${{ github.event.inputs.flavor 
 jobs:
   rootfs:
     # 【核心修复 1】：将 ubuntu-latest 锁定为 ubuntu-22.04，解决 python2 等包找不到的问题
-    runs-on: self-hosted
+    runs-on: ubuntu-22.04
     name: Build rootfs 
     steps:
       - name: Get more disk space
@@ -86,7 +86,7 @@ jobs:
 
   kernel:
     # 【核心修复 1】
-    runs-on: self-hosted
+    runs-on: ubuntu-22.04
     name: Build kernel 
     steps:
       - name: Get more disk space
@@ -131,7 +131,7 @@ jobs:
 
   build:
     # 【核心修复 1】
-    runs-on: self-hosted
+    runs-on: ubuntu-22.04
     needs: [rootfs, kernel]
     name: Build image 
     steps:
