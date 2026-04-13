@@ -31,9 +31,10 @@ on:
         default: 'noble'
         type: choice
         options:
-          - noble
-          - jammy
-
+          - noble    # Ubuntu 24.04 LTS (推荐)
+          - jammy    # Ubuntu 22.04 LTS (老旧但极度稳定)
+          - plucky   # <--- 在这里新增 Ubuntu 25.04
+          - oracular # (可选) 顺便你也可以加上 24.10
 jobs:
   # 阶段 1：构建基础根文件系统
   rootfs:
