@@ -131,7 +131,7 @@ jobs:
 
   build:
     # 【核心修复 1】
-    runs-on: self-hostedubuntu-22.04
+    runs-on: self-hosted
     needs: [rootfs, kernel]
     name: Build image 
     steps:
