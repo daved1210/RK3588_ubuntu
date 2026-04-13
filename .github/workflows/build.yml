@@ -65,7 +65,7 @@ jobs:
         shell: bash
         # 【核心修复 2】：为所有的 apt-get 命令补齐 sudo 提权，解决 lock-frontend 报错
         run: |
-          sudo apt-get update -o DPkg::Lock::Timeout=60 && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get update && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
           qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
           debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
@@ -110,7 +110,7 @@ jobs:
         shell: bash
         # 【核心修复 2】
         run: |
-          sudo apt-get update -o DPkg::Lock::Timeout=60 && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get update && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
           qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
           debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
@@ -156,7 +156,7 @@ jobs:
         shell: bash
         # 【核心修复 2】
         run: |
-          sudo apt-get update -o DPkg::Lock::Timeout=60 && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
+          sudo apt-get update && sudo apt-get purge needrestart -y && sudo apt-get upgrade -y
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison \
           qemu-user-static qemu-system-arm qemu-efi u-boot-tools binfmt-support \
           debootstrap flex libssl-dev bc rsync kmod cpio xz-utils fakeroot parted \
